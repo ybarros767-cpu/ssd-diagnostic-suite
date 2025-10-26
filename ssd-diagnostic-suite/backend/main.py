@@ -10,13 +10,23 @@ import time
 import logging
 from datetime import datetime
 import numpy as np
+import os
 
 app = FastAPI()
 
-# CORS configuration
+# CORS configuration - configurable via environment variables
+# In production, set APP_ENV=production and provide ALLOWED_ORIGINS as comma-separated list
+env_app = os.environ.get("APP_ENV", "development")
+env_origins = os.environ.get("ALLOWED_ORIGINS", "")
+if env_origins:
+    allow_origins = [o.strip() for o in env_origins.split(",") if o.strip()]
+else:
+    # default to permissive in development, locked-down in production
+    allow_origins = ["*"] if env_app != "production" else []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -239,4 +249,24 @@ async def run_benchmark(device_path: str):
 
 if __name__ == "__main__":
     import uvicorn
+
+# Healthcheck endpoint
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# Execução direta (modo local ou docker)
+if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# Endpoint raiz genérico — evita 404 e garante resposta em qualquer ambiente
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "service": "SSD Diagnostic Suite API",
+        "message": "Backend em execução e pronto para uso.",
+        "docs": "/docs",
+        "health": "/health"
+    }
