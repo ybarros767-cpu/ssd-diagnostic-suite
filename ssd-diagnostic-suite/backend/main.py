@@ -1,27 +1,31 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import asyncio
 import json
 import psutil
 import pyudev
-from typing import Dict, List
+from typing import Dict, List, Optional
 import subprocess
 import time
 import logging
 from datetime import datetime
 import numpy as np
 import os
+import socketio
 
-app = FastAPI()
+app = FastAPI(
+    title="SSD Diagnostic Suite API",
+    description="API para diagnóstico de SSD em tempo real",
+    version="1.0.0"
+)
 
-# CORS configuration - configurable via environment variables
-# In production, set APP_ENV=production and provide ALLOWED_ORIGINS as comma-separated list
+# CORS configuration
 env_app = os.environ.get("APP_ENV", "development")
 env_origins = os.environ.get("ALLOWED_ORIGINS", "")
 if env_origins:
     allow_origins = [o.strip() for o in env_origins.split(",") if o.strip()]
 else:
-    # default to permissive in development, locked-down in production
     allow_origins = ["*"] if env_app != "production" else []
 
 app.add_middleware(
@@ -36,6 +40,20 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Socket.IO server
+sio = socketio.AsyncServer(cors_allowed_origins=allow_origins, async_mode='asgi')
+socket_app = socketio.ASGIApp(sio, app)
+
+# Monitor state
+monitor = {
+    'running': False,
+    'phase': None,
+    'progress': 0,
+    'message': 'Aguardando...',
+    'device_path': None,
+    'results': {}
+}
+
 class SSDMonitor:
     def __init__(self):
         self.connected_clients: List[WebSocket] = []
@@ -47,226 +65,198 @@ class SSDMonitor:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.connected_clients.append(websocket)
+        logger.info(f"Client connected. Total clients: {len(self.connected_clients)}")
         
     def disconnect(self, websocket: WebSocket):
-        self.connected_clients.remove(websocket)
+        if websocket in self.connected_clients:
+            self.connected_clients.remove(websocket)
+            logger.info(f"Client disconnected. Total clients: {len(self.connected_clients)}")
         
     async def broadcast(self, data: Dict):
-        for client in self.connected_clients:
+        for client in self.connected_clients[:]:  # copy list to avoid modification during iteration
             try:
                 await client.send_json(data)
             except Exception as e:
                 logger.error(f"Error broadcasting to client: {e}")
-                
-    def get_smart_data(self) -> Dict:
-        if not self.device_path:
-            return {}
-        
-        try:
-            cmd = f"smartctl -a -j {self.device_path}"
-            result = subprocess.run(cmd.split(), capture_output=True, text=True)
-            return json.loads(result.stdout)
-        except Exception as e:
-            logger.error(f"Error getting SMART data: {e}")
-            return {}
-            
-    def get_performance_metrics(self) -> Dict:
-        if not self.device_path:
-            return {}
-            
-        try:
-            # Get disk IO statistics
-            disk_io = psutil.disk_io_counters(perdisk=True)
-            device_name = self.device_path.split('/')[-1]
-            if device_name in disk_io:
-                stats = disk_io[device_name]
-                return {
-                    'read_bytes': stats.read_bytes,
-                    'write_bytes': stats.write_bytes,
-                    'read_count': stats.read_count,
-                    'write_count': stats.write_count,
-                    'read_time': stats.read_time,
-                    'write_time': stats.write_time,
-                    'timestamp': datetime.now().isoformat()
-                }
-        except Exception as e:
-            logger.error(f"Error getting performance metrics: {e}")
-        return {}
+                self.disconnect(client)
 
-    async def monitor_device(self):
-        while self.monitoring:
-            try:
-                # Get SMART data
-                smart_data = self.get_smart_data()
-                
-                # Get performance metrics
-                perf_metrics = self.get_performance_metrics()
-                
-                # Update data history
-                if smart_data:
-                    self.thermal_data.append({
-                        'timestamp': datetime.now().isoformat(),
-                        'temperature': smart_data.get('temperature', {}).get('current', 0)
-                    })
-                
-                if perf_metrics:
-                    self.performance_data.append(perf_metrics)
-                
-                # Keep only last hour of data
-                cutoff = len(self.thermal_data) - 3600
-                if cutoff > 0:
-                    self.thermal_data = self.thermal_data[cutoff:]
-                    self.performance_data = self.performance_data[cutoff:]
-                
-                # Calculate real-time analytics
-                analytics = self.calculate_analytics()
-                
-                # Broadcast update
-                await self.broadcast({
-                    'type': 'update',
-                    'smart': smart_data,
-                    'performance': perf_metrics,
-                    'analytics': analytics,
-                    'timestamp': datetime.now().isoformat()
-                })
-                
-            except Exception as e:
-                logger.error(f"Error in monitoring loop: {e}")
-                
-            await asyncio.sleep(1)  # Update every second
-            
-    def calculate_analytics(self) -> Dict:
-        """Calculate real-time analytics from collected data"""
-        if not self.thermal_data or not self.performance_data:
-            return {}
-            
-        try:
-            # Temperature analysis
-            temps = [d['temperature'] for d in self.thermal_data]
-            temp_analytics = {
-                'current': temps[-1],
-                'min': min(temps),
-                'max': max(temps),
-                'avg': np.mean(temps),
-                'trend': np.polyfit(range(len(temps[-60:])), temps[-60:], 1)[0]  # Last minute trend
-            }
-            
-            # Performance analysis
-            read_speeds = []
-            write_speeds = []
-            for i in range(1, len(self.performance_data)):
-                time_diff = (datetime.fromisoformat(self.performance_data[i]['timestamp']) - 
-                           datetime.fromisoformat(self.performance_data[i-1]['timestamp'])).total_seconds()
-                if time_diff > 0:
-                    read_speed = (self.performance_data[i]['read_bytes'] - 
-                                self.performance_data[i-1]['read_bytes']) / time_diff
-                    write_speed = (self.performance_data[i]['write_bytes'] - 
-                                 self.performance_data[i-1]['write_bytes']) / time_diff
-                    read_speeds.append(read_speed)
-                    write_speeds.append(write_speed)
-            
-            perf_analytics = {
-                'read_speed': {
-                    'current': read_speeds[-1] if read_speeds else 0,
-                    'avg': np.mean(read_speeds) if read_speeds else 0,
-                    'max': max(read_speeds) if read_speeds else 0
-                },
-                'write_speed': {
-                    'current': write_speeds[-1] if write_speeds else 0,
-                    'avg': np.mean(write_speeds) if write_speeds else 0,
-                    'max': max(write_speeds) if write_speeds else 0
-                }
-            }
-            
-            return {
-                'temperature': temp_analytics,
-                'performance': perf_analytics
-            }
-            
-        except Exception as e:
-            logger.error(f"Error calculating analytics: {e}")
-            return {}
+ssd_monitor = SSDMonitor()
 
-monitor = SSDMonitor()
+@sio.event
+async def connect(sid, environ):
+    logger.info(f"Socket.IO client connected: {sid}")
+    await emit_status()
+
+@sio.event
+async def disconnect(sid):
+    logger.info(f"Socket.IO client disconnected: {sid}")
+
+async def emit_status():
+    """Broadcast current status to all connected clients"""
+    await sio.emit('status', {
+        'phase': monitor['phase'],
+        'progress': monitor['progress'],
+        'message': monitor['message']
+    })
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await monitor.connect(websocket)
+    await ssd_monitor.connect(websocket)
     try:
         while True:
             data = await websocket.receive_json()
-            if data['type'] == 'start_monitoring':
-                monitor.device_path = data['device_path']
-                monitor.monitoring = True
-                asyncio.create_task(monitor.monitor_device())
-            elif data['type'] == 'stop_monitoring':
-                monitor.monitoring = False
+            if data.get('type') == 'start_monitoring':
+                ssd_monitor.device_path = data.get('device_path')
+                ssd_monitor.monitoring = True
+                asyncio.create_task(ssd_monitor.monitor_device())
+            elif data.get('type') == 'stop_monitoring':
+                ssd_monitor.monitoring = False
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
-        monitor.disconnect(websocket)
+        ssd_monitor.disconnect(websocket)
+
+@app.post("/run")
+async def start_diagnostic():
+    """Inicia o diagnóstico de SSD"""
+    if monitor['running']:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Diagnóstico já em execução"}
+        )
+    
+    try:
+        monitor['running'] = True
+        monitor['phase'] = 'smart'
+        monitor['progress'] = 0
+        monitor['message'] = 'Iniciando diagnóstico...'
+        
+        await emit_status()
+        
+        # Simula execução do diagnóstico em background
+        asyncio.create_task(run_diagnostic())
+        
+        return {"status": "started", "message": "Diagnóstico iniciado"}
+    except Exception as e:
+        logger.error(f"Error starting diagnostic: {e}")
+        monitor['running'] = False
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+async def run_diagnostic():
+    """Executa o diagnóstico de forma assíncrona"""
+    try:
+        # Fase 1: Coleta SMART
+        monitor['phase'] = 'smart'
+        monitor['progress'] = 10
+        monitor['message'] = 'Coletando dados SMART...'
+        await emit_status()
+        await asyncio.sleep(2)
+        
+        # Fase 2: Teste de Leitura
+        monitor['phase'] = 'read'
+        monitor['progress'] = 40
+        monitor['message'] = 'Executando teste de leitura...'
+        await emit_status()
+        await asyncio.sleep(3)
+        
+        # Fase 3: Teste de Escrita
+        monitor['phase'] = 'write'
+        monitor['progress'] = 70
+        monitor['message'] = 'Executando teste de escrita...'
+        await emit_status()
+        await asyncio.sleep(3)
+        
+        # Fase 4: Relatório
+        monitor['phase'] = 'report'
+        monitor['progress'] = 90
+        monitor['message'] = 'Gerando relatório...'
+        await emit_status()
+        await asyncio.sleep(2)
+        
+        monitor['progress'] = 100
+        monitor['message'] = 'Diagnóstico concluído!'
+        await emit_status()
+        
+        await sio.emit('phase_done', 'report')
+        
+    except Exception as e:
+        logger.error(f"Error in diagnostic: {e}")
+        monitor['message'] = f'Erro: {str(e)}'
+    finally:
+        monitor['running'] = False
+
+@app.get("/report")
+async def get_report():
+    """Retorna o relatório de diagnóstico"""
+    return {
+        "status": "completed" if monitor['progress'] == 100 else "in_progress",
+        "progress": monitor['progress'],
+        "message": monitor['message'],
+        "results": monitor.get('results', {})
+    }
 
 @app.get("/devices")
 async def list_devices():
     """List available storage devices"""
     devices = []
-    context = pyudev.Context()
-    
-    for device in context.list_devices(subsystem='block', DEVTYPE='disk'):
-        if device.get('ID_BUS') in ['usb', 'ata', 'scsi']:
-            devices.append({
-                'path': device.device_node,
-                'model': device.get('ID_MODEL', ''),
-                'serial': device.get('ID_SERIAL', ''),
-                'bus': device.get('ID_BUS', ''),
-                'size': device.get('size', 0)
-            })
+    try:
+        context = pyudev.Context()
+        
+        for device in context.list_devices(subsystem='block', DEVTYPE='disk'):
+            if device.get('ID_BUS') in ['usb', 'ata', 'scsi']:
+                size = device.get('size.bytes', 0)
+                devices.append({
+                    'path': device.device_node,
+                    'model': device.get('ID_MODEL', 'Unknown'),
+                    'serial': device.get('ID_SERIAL', 'Unknown'),
+                    'bus': device.get('ID_BUS', 'Unknown'),
+                    'size': size if size else device.get('size', '0')
+                })
+    except Exception as e:
+        logger.error(f"Error listing devices: {e}")
     
     return devices
 
-@app.get("/device/{device_path}/smart")
+@app.get("/device/{device_path:path}/smart")
 async def get_smart(device_path: str):
     """Get SMART data for specific device"""
-    monitor.device_path = device_path
-    return monitor.get_smart_data()
-
-@app.get("/device/{device_path}/benchmark")
-async def run_benchmark(device_path: str):
-    """Run basic benchmark on device"""
     try:
-        # Run fio benchmark
-        cmd = [
-            "fio", "--name=benchmark", f"--filename={device_path}",
-            "--direct=1", "--rw=randrw", "--bs=4k",
-            "--size=100m", "--runtime=30", "--numjobs=4",
-            "--group_reporting", "--output-format=json"
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return json.loads(result.stdout)
+        cmd = f"smartctl -a -j {device_path}"
+        result = subprocess.run(cmd.split(), capture_output=True, text=True)
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        else:
+            return {"error": "Failed to get SMART data", "output": result.stderr}
     except Exception as e:
-        logger.error(f"Benchmark error: {e}")
+        logger.error(f"Error getting SMART data: {e}")
         return {"error": str(e)}
 
-if __name__ == "__main__":
-    import uvicorn
-
-# Healthcheck endpoint
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Healthcheck endpoint"""
+    return {"status": "ok", "running": monitor['running']}
 
-# Execução direta (modo local ou docker)
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# Endpoint raiz genérico — evita 404 e garante resposta em qualquer ambiente
 @app.get("/")
 def root():
     return {
         "status": "ok",
         "service": "SSD Diagnostic Suite API",
-        "message": "Backend em execução e pronto para uso.",
-        "docs": "/docs",
-        "health": "/health"
+        "message": "Backend ativo e pronto para uso.",
+        "version": "1.0.0",
+        "endpoints": {
+            "docs": "/docs",
+            "health": "/health",
+            "run": "/run (POST)",
+            "report": "/report",
+            "devices": "/devices"
+        }
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

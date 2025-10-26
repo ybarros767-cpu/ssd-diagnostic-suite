@@ -2,29 +2,34 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps required to build some Python packages (kept minimal)
+# Dependências do sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
-    python3-distutils \
-    gfortran \
-    libatlas-base-dev \
-    pkg-config \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Copiar requirements
 COPY requirements.txt ./
-# Make sure pip, setuptools and wheel are recent to satisfy build backends
+
+# Instalar dependências Python
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy app source
-COPY . /app
+# Copiar código-fonte
+COPY main.py ./
+COPY .env* ./
 
-ENV PYTHONUNBUFFERED=1
+# Variáveis de ambiente
+ENV APP_ENV=production
+ENV HOST=0.0.0.0
 ENV PORT=8000
 
 EXPOSE 8000
 
-# Use uvicorn to run the FastAPI app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Iniciar o backend
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
