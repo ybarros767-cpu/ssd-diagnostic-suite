@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import asyncio
@@ -24,8 +24,18 @@ from history_manager import history_manager
 from nvme_support import nvme_support
 from benchmark_database import benchmark_db
 from cmdb_api import router as cmdb_router
+from settings import settings
+from auth import router as auth_router, get_current_user
+from prometheus_exporter import prometheus_exporter
 
-# Carregar variáveis de ambiente do arquivo .env
+try:
+    # Middleware para métricas HTTP
+    from starlette_exporter import PrometheusMiddleware, handle_metrics
+except Exception:  # pragma: no cover
+    PrometheusMiddleware = None
+    handle_metrics = None
+
+# Carregar variáveis de ambiente do arquivo .env (gerenciado também por settings)
 load_dotenv()
 
 app = FastAPI(
@@ -34,13 +44,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration
-env_app = os.environ.get("APP_ENV", "development")
-env_origins = os.environ.get("ALLOWED_ORIGINS", "")
-if env_origins:
-    allow_origins = [o.strip() for o in env_origins.split(",") if o.strip()]
-else:
-    allow_origins = ["*"] if env_app != "production" else []
+# CORS configuration via settings
+allow_origins = settings.get_allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,7 +55,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Incluir rotas da API CMDB
+# Prometheus HTTP metrics (requisições) e device metrics (custom)
+if settings.enable_prometheus:
+    if PrometheusMiddleware is not None:
+        app.add_middleware(PrometheusMiddleware, app_name="ssd-diagnostic-suite", group_paths=True)
+        if handle_metrics:
+            app.add_route("/metrics/prometheus", handle_metrics)
+    try:
+        prometheus_exporter.start(port=settings.prometheus_port)
+    except Exception:
+        pass
+
+# Incluir rotas
+app.include_router(auth_router)
 app.include_router(cmdb_router)
 
 # Configure logging
@@ -59,7 +76,7 @@ logger = logging.getLogger(__name__)
 
 # Groq AI client (free alternative to OpenAI)
 groq_client = None
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "your_api_key_here")
+GROQ_API_KEY = settings.groq_api_key or os.environ.get("GROQ_API_KEY", "your_api_key_here")
 if GROQ_API_KEY and GROQ_API_KEY != "your_api_key_here":
     try:
         groq_client = Groq(api_key=GROQ_API_KEY)
@@ -136,21 +153,32 @@ class SSDMonitor:
 
 ssd_monitor = SSDMonitor()
 
-def extract_temperature_from_sys(device_path: str):
-    """Extrai temperatura real do sistema"""
+
+async def run_cmd(args: List[str], timeout: int = 10) -> subprocess.CompletedProcess:
+    """Executa comando em threadpool para não bloquear o event loop."""
+    return await asyncio.to_thread(
+        subprocess.run,
+        args,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+async def extract_temperature_from_sys_async(device_path: str):
+    """Extrai temperatura real do sistema (não bloqueante)."""
     try:
-        # Tentar obter temperatura do sysfs
-        temp_paths = [
+        # Tentar obter temperatura do sysfs (mantido como referência)
+        _ = [
             f'/sys/block/{os.path.basename(device_path)}/device/hwmon/hwmon*/temp1_input',
-            f'/sys/block/{os.path.basename(device_path)}/queue/hw_sector_size',  # Indirect path
+            f'/sys/block/{os.path.basename(device_path)}/queue/hw_sector_size',
         ]
         # Para simplificar, obter de smartctl
-        result = subprocess.run(['smartctl', '-A', device_path], capture_output=True, text=True, timeout=5)
+        result = await run_cmd(['smartctl', '-A', device_path], timeout=5)
         if result.returncode == 0:
             temp_match = re.search(r'Temperature.*?(\d+)', result.stdout)
             if temp_match:
                 monitor['metrics']['temperature'] = int(temp_match.group(1))
-    except:
+    except Exception:
         pass
 
 @sio.event
@@ -355,7 +383,7 @@ OVERALL CONFIDENCE: {explanation.get('overall_confidence', 0) * 100:.1f}%
         return f"Erro na análise: {str(e)}"
 
 @app.post("/run")
-async def start_diagnostic(request: Request):
+async def start_diagnostic(request: Request, user=Depends(get_current_user)):
     """Inicia o diagnóstico de SSD"""
     if monitor.get('running'):
         return JSONResponse(
@@ -442,10 +470,7 @@ async def run_diagnostic():
         smart_data = {}
         smart_analysis_complete = {}
         try:
-            smart_result = subprocess.run(
-                ['smartctl', '-a', '-j', device_path],
-                capture_output=True, text=True, timeout=10
-            )
+            smart_result = await run_cmd(['smartctl', '-a', '-j', device_path], timeout=10)
             if smart_result.returncode == 0:
                 smart_data = json.loads(smart_result.stdout)
                 
@@ -496,10 +521,10 @@ async def run_diagnostic():
                 await emit_status()
             else:
                 monitor['message'] = f'AVISO: Não foi possível ler SMART de {device_path}'
-                extract_temperature_from_sys(device_path)
+                await extract_temperature_from_sys_async(device_path)
         except Exception as e:
             logger.error(f"Error reading SMART: {e}")
-            extract_temperature_from_sys(device_path)
+            await extract_temperature_from_sys_async(device_path)
         
         monitor['metrics']['smart_data'] = smart_data
         # Guardar análise completa apenas se disponível
@@ -735,6 +760,20 @@ async def run_diagnostic():
         
         await sio.emit('phase_done', 'report')
         await sio.emit('diagnostic_complete', monitor['results'])
+
+        # Persistência de histórico
+        try:
+            history_manager.save_execution(device_path, monitor['results'])
+        except Exception as e:
+            logger.error(f"Erro ao salvar histórico em arquivo: {e}")
+
+        if settings.enable_db:
+            try:
+                from db import init_db, save_diagnostic
+                init_db()
+                save_diagnostic(monitor['results'], device_path)
+            except Exception as e:
+                logger.error(f"Erro ao salvar histórico no banco: {e}")
         
     except Exception as e:
         logger.error(f"Error in diagnostic: {e}")
@@ -745,7 +784,7 @@ async def run_diagnostic():
         monitor['running'] = False
 
 @app.get("/report")
-async def get_report():
+async def get_report(user=Depends(get_current_user)):
     """Retorna o relatório de diagnóstico em JSON"""
     return {
         "status": "completed" if monitor['progress'] == 100 else "in_progress",
@@ -766,12 +805,12 @@ async def get_report_html():
     return HTMLResponse(content=html.decode('utf-8'))
 
 @app.get("/metrics")
-async def get_metrics():
+async def get_metrics(user=Depends(get_current_user)):
     """Retorna métricas em tempo real"""
     return monitor['metrics']
 
 @app.post("/config")
-async def update_config(config: Dict):
+async def update_config(config: Dict, user=Depends(get_current_user)):
     """Atualiza configurações do diagnóstico"""
     if 'test_duration' in config:
         monitor['config']['test_duration'] = config['test_duration']
@@ -783,18 +822,17 @@ async def update_config(config: Dict):
     return {"status": "ok", "config": monitor['config']}
 
 @app.get("/config")
-async def get_config():
+async def get_config(user=Depends(get_current_user)):
     """Retorna configurações atuais"""
     return monitor['config']
 
 @app.get("/devices")
-async def list_devices():
+async def list_devices(user=Depends(get_current_user)):
     """List available storage devices"""
     devices = []
     try:
         # Listar dispositivos de bloco reais
-        result = subprocess.run(['lsblk', '-d', '-n', '-o', 'NAME,SIZE,MODEL'], 
-                              capture_output=True, text=True)
+        result = await run_cmd(['lsblk', '-d', '-n', '-o', 'NAME,SIZE,MODEL'])
         
         for line in result.stdout.split('\n'):
             if not line:
@@ -823,9 +861,9 @@ async def list_devices():
                 
                 # Tentar identificar USB
                 try:
-                    udev_result = subprocess.run(
-                        ['udevadm', 'info', '--query=property', '--name=' + device_name],
-                        capture_output=True, text=True, timeout=2
+                    udev_result = await run_cmd(
+                        ['udevadm', 'info', '--query=property', f'--name={device_name}'],
+                        timeout=2
                     )
                     udev_output = udev_result.stdout.lower()
                     if 'usb' in udev_output or 'usb_device' in udev_output:
@@ -861,11 +899,11 @@ async def list_devices():
     return devices
 
 @app.get("/device/{device_path:path}/smart")
-async def get_smart(device_path: str):
+async def get_smart(device_path: str, user=Depends(get_current_user)):
     """Get SMART data for specific device"""
     try:
-        cmd = f"smartctl -a -j {device_path}"
-        result = subprocess.run(cmd.split(), capture_output=True, text=True)
+        cmd = ["smartctl", "-a", "-j", device_path]
+        result = await run_cmd(cmd, timeout=10)
         if result.returncode == 0:
             return json.loads(result.stdout)
         else:
@@ -894,6 +932,36 @@ def root():
             "devices": "/devices"
         }
     }
+
+
+# Endpoints de histórico com banco (opcional)
+@app.get("/diagnostics")
+async def diagnostics_list(user=Depends(get_current_user)):
+    try:
+        if not settings.enable_db:
+            return {"available": False, "message": "Banco desabilitado"}
+        from db import init_db, list_diagnostics
+        init_db()
+        return {"available": True, "items": list_diagnostics()}
+    except Exception as e:
+        logger.error(f"Erro ao listar diagnostics: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/diagnostics/{diagnostic_id}")
+async def diagnostics_get(diagnostic_id: int, user=Depends(get_current_user)):
+    try:
+        if not settings.enable_db:
+            return {"available": False, "message": "Banco desabilitado"}
+        from db import init_db, get_diagnostic
+        init_db()
+        row = get_diagnostic(diagnostic_id)
+        if not row:
+            return JSONResponse(status_code=404, content={"error": "Not found"})
+        return row
+    except Exception as e:
+        logger.error(f"Erro ao obter diagnostic: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
     import uvicorn

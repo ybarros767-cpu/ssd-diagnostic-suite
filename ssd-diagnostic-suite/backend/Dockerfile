@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     curl \
+    smartmontools \
+    nvme-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements
@@ -17,7 +19,7 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copiar código-fonte
-COPY main.py smart_analysis.py report_generator.py ai_explainer.py temp_validator.py history_manager.py nvme_support.py pdf_generator.py enterprise_monitor.py prometheus_exporter.py cmdb_api.py benchmark_database.py ./
+COPY main.py smart_analysis.py report_generator.py ai_explainer.py temp_validator.py history_manager.py nvme_support.py pdf_generator.py enterprise_monitor.py prometheus_exporter.py cmdb_api.py benchmark_database.py settings.py auth.py db.py ./
 COPY .env* ./
 
 # Variáveis de ambiente
@@ -25,7 +27,7 @@ ENV APP_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
-EXPOSE 8000
+EXPOSE 8000 9090
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
