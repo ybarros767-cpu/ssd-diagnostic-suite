@@ -1,4 +1,4 @@
-# 🎯 Disk Diagnostic Suite v2.5.0
+# 🎯 Disk Diagnostic Suite v2.6.0
 
 **Ferramenta Profissional Corporativa de Análise de Discos (SSD + HD)**
 
@@ -24,8 +24,10 @@ Sistema completo, profissional e corporate-ready para análise de discos com int
 
 ### 🚀 Infraestrutura
 - **Docker & Nginx** - Deploy containerizado com reverse proxy
-- **Arquitetura Extensível** - Pronta para NVMe, ferramentas avançadas (fio), e integração corporate
-- **Pronto para Produção** - Health checks, logs estruturados, API REST completa
+- **Observabilidade** - `/metrics/prometheus` (HTTP) e Exporter dedicado (porta 9090)
+- **Autenticação JWT (toggleável)** - `ENABLE_AUTH=true`, RBAC básico (admin/viewer)
+- **Histórico Persistente** - SQLite ativável (`ENABLE_DB=true`) com endpoints `/diagnostics`
+- **Pronto para Produção** - Health checks, CORS configurável, API REST completa
 
 ## 🚀 Instalação Rápida
 
@@ -35,10 +37,16 @@ sudo dpkg -i ssd-diagnostic-suite_1.0.0-1_all.deb
 sudo apt install ./ssd-diagnostic-suite_1.0.0-1_all.deb
 ```
 
-### Via Deploy Manual
+### Via Docker Compose
 ```bash
-./scripts/deploy/DEPLOY.sh
+docker compose build backend
+docker compose up -d
 ```
+
+Ports:
+- Backend API: `8000`
+- Prometheus Exporter: `9090`
+- Nginx (frontend): `8080`
 
 ## 🌐 Uso
 
@@ -65,14 +73,14 @@ ssd-diagnostic-suite/
 │   ├── dev/           # Docs de desenvolvimento
 │   └── user/          # Docs para usuários
 ├── ssd-diagnostic-suite/
-│   ├── backend/       # Backend Python/FastAPI
+│   ├── backend/       # Backend Python/FastAPI (metrics, JWT, SQLite)
 │   └── src/           # Frontend React
 └── README.md          # Este arquivo
 ```
 
 ## 🔧 Tecnologias
 
-- **Backend**: Python 3.12, FastAPI, Socket.IO
+- **Backend**: Python 3.12, FastAPI, Socket.IO, SQLAlchemy
 - **Frontend**: React, TypeScript, Material-UI, Vite
 - **IA**: Groq AI (gratuito, sem limites)
 - **Infra**: Docker, Docker Compose, Nginx
@@ -80,12 +88,19 @@ ssd-diagnostic-suite/
 ## 📋 Requisitos
 
 - Docker & Docker Compose
-- smartctl (smartmontools)
+- smartctl (smartmontools) e `nvme-cli` (no host ou container)
 - Ubuntu/Debian (para .deb)
 
 ## 🆘 Suporte
 
 Documentação completa em: `docs/`
+
+### Novidades v2.6.0
+- Settings centralizados (`backend/settings.py`)
+- Auth JWT com `/auth/login` e proteção por token (toggle `ENABLE_AUTH`)
+- Persistência SQLite (toggle `ENABLE_DB`) e rotas `/diagnostics`
+- Métricas HTTP em `/metrics/prometheus` e exporter na 9090
+- Subprocessos não bloqueantes e melhorias de robustez
 
 ## 📄 Licença
 

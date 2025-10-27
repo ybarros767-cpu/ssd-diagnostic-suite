@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 100
+select = ["E","F","I","UP","B","SIM","PL"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["main", "auth", "settings", "db"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
