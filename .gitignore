@@ -1,49 +1,51 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-*.egg-info/
-dist/
-build/
+# Environment files
+.env
+*.env
+*.env.local
+.env.backup
 
 # Node
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+
+# Build outputs
+dist/
+build-output/
+.build/
+*.deb
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Docker
+.docker/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
 
 # Logs
 *.log
 logs/
 
-# Build
-dist/
-build/
-*.egg-info/
+# OS
+.DS_Store
+Thumbs.db
 
-# Docker
-.env
-*.env
-
-# Temporary
-tmp/
-temp/
+# Temporary files
 *.tmp
+*.bak
+*.backup
 
+# Sensitive data
+.env
+*.key
+*.pem

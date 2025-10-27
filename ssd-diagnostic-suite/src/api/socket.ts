@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 
-const API_HOST = (import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`)
+// Usa a mesma origem do navegador (nginx fará proxy)
+const API_HOST = import.meta.env.VITE_API_BASE_URL || ''
 let socket: Socket | null = null
 
 export function connectSocket() {
@@ -24,6 +25,7 @@ export function disconnectSocket() {
 }
 
 export function getApiBase() {
-  return API_HOST
+  // Se não houver variável de ambiente, usa a origem atual (nginx fará proxy)
+  return API_HOST || ''
 }
 

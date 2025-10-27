@@ -13,8 +13,8 @@ export default defineConfig({
     port: 3000,
   },
   build: {
-    outDir: 'dist',
-    sourcemap: true,
+    outDir: 'build-output',
+    sourcemap: false,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),

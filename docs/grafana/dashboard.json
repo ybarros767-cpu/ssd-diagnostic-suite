@@ -1,0 +1,94 @@
+{
+  "dashboard": {
+    "title": "Disk Diagnostic Suite - Enterprise Monitoring",
+    "tags": ["ssd", "diagnostic", "enterprise"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Saúde do Disco (%)",
+        "targets": [
+          {
+            "expr": "disk_health_score",
+            "legendFormat": "{{device}}"
+          }
+        ],
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4}
+      },
+      {
+        "title": "Temperatura (°C)",
+        "targets": [
+          {
+            "expr": "disk_temperature_celsius",
+            "legendFormat": "{{device}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4}
+      },
+      {
+        "title": "Nível de Desgaste (%)",
+        "targets": [
+          {
+            "expr": "disk_wear_level_percent",
+            "legendFormat": "{{device}}"
+          }
+        ],
+        "type": "graph条形码",
+        "gridPos": {"x": 0, "y": 4, "w": 6, "h": 4}
+      },
+      {
+        "title": "Throughput (MB/s)",
+        "targets": [
+          {
+            "expr": "disk_read_speed_mbps",
+            "legendFormat": "Leitura {{device}}"
+          },
+          {
+            "expr": "disk_write_speed_mbps",
+            "legendFormat": "Escrita {{device}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {"x": 6, "y": 4, "w": 6, "h": 4}
+      },
+      {
+        "title": "IOPS",
+        "targets": [
+          {
+            "expr": "disk_iops",
+            "legendFormat": "{{device}}"
+          }
+        ],
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 6}
+      },
+      {
+        "title": "Bad Blocks",
+        "targets": [
+          {
+            "expr": "disk_bad_blocks",
+            "legendFormat": "{{device}}"
+          }
+        ],
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 14, "w": 4, "h": 4}
+      },
+      {
+        "title": "Power On Hours",
+        "targets": [
+          {
+            "expr": "disk_power_on_hours",
+            "legendFormat": "{{device}}"
+          }
+        ],
+        "type": "stat",
+        "gridPos": {"x": 4, "y": 14, "w": 4, "h": 4}
+      }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 16,
+    "version": 1
+  }
+}
+

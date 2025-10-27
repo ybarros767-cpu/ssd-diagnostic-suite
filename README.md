@@ -1,172 +1,92 @@
-# 🎯 SSD Diagnostic Suite
+# 🎯 Disk Diagnostic Suite v2.5.0
 
-Sistema completo de diagnóstico de SSD com dois painéis: **CLI** (Terminal) e **Web** (Browser).
+**Ferramenta Profissional Corporativa de Análise de Discos (SSD + HD)**
 
-## 📋 Índice
+Sistema completo, profissional e corporate-ready para análise de discos com interface web moderna, IA explicativa com raciocínio detalhado, e suporte completo para SSDs e HDs via USB e SATA.
 
-- [Início Rápido](#-início-rápido)
-- [Dois Painéis Disponíveis](#-dois-painéis-disponíveis)
-- [Instalação](#-instalação)
-- [Documentação](#-documentação)
-- [Estrutura](#-estrutura)
-- [Endpoints API](#-endpoints-api)
-- [Licença](#-licença)
+## ✨ Características Principais
 
-## 🚀 Início Rápido
+### 🔍 Diagnóstico Completo
+- **Detecção Automática** de SSDs e HDs (SATA/USB/NVMe)
+- **Análise SMART Profunda** - Todos os 30+ atributos analisados em tempo real
+- **IA Explicativa** - Groq AI com raciocínio detalhado, evidence-based e confidence scores
+- **Temperatura Precisa** - Validação de bridge USB, fallback automático e detecção de valores incorretos
 
-### CLI Dashboard (Recomendado para produção)
+### 📊 Performance & Métricas
+- **Testes Completos** de performance (leitura/escrita sequencial e aleatória)
+- **Métricas Avançadas** (IOPS, latência, error rate, wear level, health score)
+- **Modos Diferentes** - Simplificado (~30s) vs Avançado (~90s) com funcionalidades reais
 
+### 🎨 Interface & UX
+- **Interface Web Moderna** com React, TypeScript e Material-UI
+- **Feedback Visual** - Toast notifications, auto-fechamento de modais, indicadores de modo
+- **Relatórios Multi-formato** - Export em JSON, HTML com layout profissional
+
+### 🚀 Infraestrutura
+- **Docker & Nginx** - Deploy containerizado com reverse proxy
+- **Arquitetura Extensível** - Pronta para NVMe, ferramentas avançadas (fio), e integração corporate
+- **Pronto para Produção** - Health checks, logs estruturados, API REST completa
+
+## 🚀 Instalação Rápida
+
+### Via Pacote .deb
 ```bash
-./scripts/start_cli.sh
+sudo dpkg -i ssd-diagnostic-suite_1.0.0-1_all.deb
+sudo apt install ./ssd-diagnostic-suite_1.0.0-1_all.deb
 ```
 
-### Web Dashboard
-
+### Via Deploy Manual
 ```bash
-./scripts/install.sh
-# Acesse: http://localhost:8080
+./scripts/deploy/DEPLOY.sh
 ```
 
-## 🎯 Dois Painéis Disponíveis
+## 🌐 Uso
 
-### 🖥️ CLI Dashboard ⭐
+Acesse: **http://localhost:8080**
 
-- **Interface**: Terminal com cores ANSI
-- **Dependências**: Apenas Python + requests
-- **Uso**: SSH, servidores, headless
-- **Comando**: `./scripts/start_cli.sh`
+1. Selecione um dispositivo (SSD ou HD) na lista
+2. Configure no ícone de Configurações:
+   - **Modo Simplificado**: Testes rápidos (~30s)
+   - **Modo Avançado**: Análise completa e profunda (~90s)
+3. Clique em "Iniciar Diagnóstico"
+4. Baixe o relatório completo (botão de download)
 
-### 🌐 Web Dashboard
-
-- **Interface**: Browser moderno
-- **Tecnologia**: React + TypeScript + Material UI
-- **Gráficos**: Plotly.js interativo
-- **Uso**: Desktop com interface gráfica
-- **Comando**: `./scripts/install.sh`
-
-## 📦 Instalação
-
-### Pré-requisitos
-
-```bash
-# Python 3.7+ (obrigatório)
-python3 --version
-
-# Node.js 18+ (apenas para Web Dashboard)
-node --version
-
-# Docker (opcional, para Web Dashboard)
-docker --version
-```
-
-### CLI Dashboard
-
-```bash
-# 1. Instalar dependência
-pip3 install requests
-
-# 2. Executar
-./scripts/start_cli.sh
-```
-
-### Web Dashboard
-
-```bash
-# 1. Build do frontend
-cd ssd-diagnostic-suite
-npm install
-npm run build
-cd ..
-
-# 2. Subir containers
-docker compose up -d
-```
-
-## 🎮 CLI Dashboard - Comandos
-
-| Tecla | Ação |
-|-------|------|
-| `I` | Iniciar Diagnóstico |
-| `R` | Ver Relatório |
-| `S` | Status do Backend |
-| `D` | Listar Dispositivos |
-| `Q` | Sair |
-
-## 📖 Documentação
-
-- **[CLI Dashboard](docs/CLI_DASHBOARD_README.md)** - Guia completo do CLI
-- **[Quick Start](docs/QUICKSTART_CLI.md)** - Início rápido
-- **[Changelog](docs/CHANGELOG.md)** - Histórico de alterações
-
-## 🏗️ Estrutura
+## 📁 Estrutura do Projeto
 
 ```
 ssd-diagnostic-suite/
-├── docs/                           # 📚 Documentação
-│   ├── CLI_DASHBOARD_README.md
-│   ├── QUICKSTART_CLI.md
-│   ├── CHANGELOG.md
-│   └── README.md
-│
-├── scripts/                        # 🛠️ Scripts
-│   ├── start_cli.sh               # CLI Dashboard
-│   ├── install.sh                 # Web Dashboard
-│   ├── simple_cli_dashboard.py   # Dashboard CLI
-│   └── cli_panel.py              # Dashboard avançado
-│
-├── ssd-diagnostic-suite/          # 🌐 Frontend + Backend
-│   ├── src/                       # React components
-│   ├── backend/                   # FastAPI
-│   │   ├── main.py
-│   ├── electron/                 # Desktop app
-│   └── dist/                     # Build (gerado)
-│
-├── docker-compose.yml             # 🐳 Orquestração
-├── Dockerfile                     # 📦 Container backend
-└── requirements.txt              # 🐍 Python deps
+├── config/              # Configurações (Docker, Nginx)
+├── scripts/             # Scripts organizados
+│   ├── build/          # Scripts de build
+│   ├── deploy/         # Scripts de deploy
+│   └── utils/          # Utilitários
+├── docs/               # Documentação
+│   ├── deployment/     # Guias de deploy
+│   ├── dev/           # Docs de desenvolvimento
+│   └── user/          # Docs para usuários
+├── ssd-diagnostic-suite/
+│   ├── backend/       # Backend Python/FastAPI
+│   └── src/           # Frontend React
+└── README.md          # Este arquivo
 ```
 
-## 📡 Endpoints API
+## 🔧 Tecnologias
 
-- `GET /` - Info da API
-- `GET /health` - Healthcheck
-- `POST /run` - Inicia diagnóstico
-- `GET /report` - Retorna relatório
-- `GET /devices` - Lista dispositivos
-- `GET /device/{path}/smart` - Dados SMART
+- **Backend**: Python 3.12, FastAPI, Socket.IO
+- **Frontend**: React, TypeScript, Material-UI, Vite
+- **IA**: Groq AI (gratuito, sem limites)
+- **Infra**: Docker, Docker Compose, Nginx
 
-## 🔧 Desenvolvimento
+## 📋 Requisitos
 
-### CLI Dashboard (Dev)
+- Docker & Docker Compose
+- smartctl (smartmontools)
+- Ubuntu/Debian (para .deb)
 
-```bash
-cd scripts
-python3 simple_cli_dashboard.py
-```
+## 🆘 Suporte
 
-### Web Dashboard (Dev)
+Documentação completa em: `docs/`
 
-```bash
-cd ssd-diagnostic-suite
-npm run dev    # Frontend
-python3 backend/main.py  # Backend
-```
+## 📄 Licença
 
-### Docker
-
-```bash
-docker compose up -d
-docker logs -f ssd_backend
-```
-
-## 📝 Licença
-
-MIT License
-
-## 👤 Autor
-
-**Yuri Barros** - [@ybarros767](https://github.com/ybarros767)
-
----
-
-⭐ **Contribuições são bem-vindas!**
+MIT License - Veja LICENSE
