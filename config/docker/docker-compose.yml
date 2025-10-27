@@ -4,10 +4,14 @@ services:
       context: ssd-diagnostic-suite/backend
       dockerfile: Dockerfile
     container_name: ssd_backend
+    privileged: true
     ports:
       - "8000:8000"
-    env_file:
-      - .env
+      - "9090:9090"
+    volumes:
+      - /dev:/dev
+      - /run/udev:/run/udev:ro
+      - ssd_data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -21,9 +25,12 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./dist:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../ssd-diagnostic-suite/dist:/usr/share/nginx/html:ro
+      - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  ssd_data:

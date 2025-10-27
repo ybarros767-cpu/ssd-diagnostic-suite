@@ -151,6 +151,28 @@ class SSDMonitor:
                 logger.error(f"Error broadcasting to client: {e}")
                 self.disconnect(client)
 
+    async def monitor_device(self):
+        """Loop simples de monitoramento para WebSocket nativo (/ws)."""
+        try:
+            while self.monitoring and self.device_path:
+                # Atualizar temperatura de forma não-bloqueante
+                try:
+                    await extract_temperature_from_sys_async(self.device_path)
+                except Exception:
+                    pass
+
+                payload = {
+                    "type": "monitor_update",
+                    "device_path": self.device_path,
+                    "temperature": monitor["metrics"].get("temperature"),
+                    "health": monitor["metrics"].get("health"),
+                    "timestamp": datetime.now().isoformat(),
+                }
+                await self.broadcast(payload)
+                await asyncio.sleep(2)
+        finally:
+            self.monitoring = False
+
 ssd_monitor = SSDMonitor()
 
 

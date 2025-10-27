@@ -15,8 +15,20 @@ class HistoryManager:
     
     def __init__(self, history_file: str = 'diagnostic_history.json'):
         self.history_file = history_file
-        self.history_dir = '/app/history'
-        os.makedirs(self.history_dir, exist_ok=True)
+        # Diretório padrão no container; faz fallback para diretório local se sem permissão
+        self.history_dir = os.environ.get('HISTORY_DIR', '/app/history')
+        try:
+            os.makedirs(self.history_dir, exist_ok=True)
+        except Exception:
+            # Ambiente local sem permissão para /app: usar ./history
+            self.history_dir = os.path.abspath(os.path.join(os.getcwd(), 'history'))
+            try:
+                os.makedirs(self.history_dir, exist_ok=True)
+            except Exception:
+                # Último fallback: pasta temporária do usuário
+                tmp_dir = os.path.join(os.path.expanduser('~'), '.ssd_history')
+                os.makedirs(tmp_dir, exist_ok=True)
+                self.history_dir = tmp_dir
         
     def save_execution(self, device_path: str, results: Dict) -> str:
         """Salva execução no histórico"""
