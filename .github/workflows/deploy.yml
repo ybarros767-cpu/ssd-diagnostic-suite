@@ -48,16 +48,17 @@ jobs:
         run: |
           cp .env.example .env
       
-      - name: Prepare deployment files
-        run: |
-          rm -rf dist
-          mkdir -p dist
-          if [ -d "ssd-diagnostic-suite/dist" ]; then
-            cp -r ssd-diagnostic-suite/dist/. dist/
-          else
-            echo "Build output not found at ssd-diagnostic-suite/dist" >&2
-            exit 1
-          fi
+        - name: Prepare deployment files
+          run: |
+            FRONTEND_BUILD_DIR="ssd-diagnostic-suite/build-output"
+            rm -rf dist
+            mkdir -p dist
+            if [ -d "$FRONTEND_BUILD_DIR" ]; then
+              cp -r "$FRONTEND_BUILD_DIR"/. dist/
+            else
+              echo "Build output not found at $FRONTEND_BUILD_DIR" >&2
+              exit 1
+            fi
       
       - name: Build Docker images
         run: |
