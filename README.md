@@ -37,7 +37,7 @@ sudo apt install ./ssd-diagnostic-suite_1.0.0-1_all.deb
 
 ### Via Deploy Manual
 ```bash
-./scripts/deploy/DEPLOY.sh
+./deploy.sh
 ```
 
 ## 🌐 Uso
