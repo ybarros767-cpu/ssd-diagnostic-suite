@@ -29,16 +29,62 @@ Sistema completo, profissional e corporate-ready para análise de discos com int
 
 ## 🚀 Instalação Rápida
 
-### Via Pacote .deb
-```bash
-sudo dpkg -i ssd-diagnostic-suite_1.0.0-1_all.deb
-sudo apt install ./ssd-diagnostic-suite_1.0.0-1_all.deb
-```
-
-### Via Deploy Manual
+### Via Docker Compose (recomendado)
 ```bash
 ./deploy.sh
 ```
+
+O script realiza o build do frontend, copia os artefatos para `dist/` e sobe os containers `ssd_backend` e `ssd_nginx` via Docker Compose.
+
+## 💻 Instalação detalhada no Ubuntu
+
+1. **Instale dependências do sistema:**
+   ```bash
+   sudo apt update
+   sudo apt install -y git curl docker.io docker-compose-plugin smartmontools python3 python3-venv
+   ```
+
+2. **Instale o Node.js 18 LTS (necessário para o build do frontend):**
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+
+3. **Habilite o Docker para ser usado sem `sudo` (opcional, exige logout/login):**
+   ```bash
+   sudo usermod -aG docker "$USER"
+   newgrp docker
+   ```
+
+4. **Clone o repositório e copie as variáveis de ambiente padrão:**
+   ```bash
+   git clone https://github.com/<seu-usuario>/ssd-diagnostic-suite.git
+   cd ssd-diagnostic-suite
+   cp .env.example .env
+   ```
+
+   Se você possui uma chave da Groq API, edite `.env` e substitua `GROQ_API_KEY` pela sua chave.
+
+5. **Instale as dependências do frontend e faça o build:**
+   ```bash
+   cd ssd-diagnostic-suite
+   npm ci
+   npm run build
+   cd ..
+   ```
+
+6. **Execute o deploy containerizado:**
+   ```bash
+   ./deploy.sh
+   ```
+
+7. **Verifique os serviços:**
+   ```bash
+   docker ps
+   curl http://localhost:8000/health
+   ```
+
+   A interface web fica disponível em `http://localhost:8080` e a API em `http://localhost:8000`.
 
 ## 🌐 Uso
 
@@ -81,7 +127,7 @@ ssd-diagnostic-suite/
 
 - Docker & Docker Compose
 - smartctl (smartmontools)
-- Ubuntu/Debian (para .deb)
+- Ubuntu/Debian (recomendado)
 
 ## 🆘 Suporte
 

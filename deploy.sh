@@ -23,6 +23,8 @@ echo "✅ Limpeza completa!"
 echo ""
 echo "🔧 Build frontend..."
 cd ssd-diagnostic-suite
+echo "📦 Instalando dependências do frontend..."
+npm ci
 npm run build
 cd ..
 sudo rm -rf dist
