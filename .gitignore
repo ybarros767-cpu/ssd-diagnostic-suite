@@ -49,3 +49,7 @@ Thumbs.db
 .env
 *.key
 *.pem
+
+# But allow examples
+!.env.example
+!.env.template

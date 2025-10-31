@@ -44,6 +44,10 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
         continue-on-error: true
       
+      - name: Create .env file
+        run: |
+          cp .env.example .env
+      
       - name: Prepare deployment files
         run: |
           mkdir -p dist
