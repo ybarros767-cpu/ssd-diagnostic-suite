@@ -23,10 +23,19 @@ echo "✅ Limpeza completa!"
 echo ""
 echo "🔧 Build frontend..."
 cd ssd-diagnostic-suite
+echo "📦 Instalando dependências do frontend..."
+npm ci
 npm run build
 cd ..
+sudo rm -rf dist
 sudo mkdir -p dist
-sudo cp -r ssd-diagnostic-suite/build-output/* dist/
+FRONTEND_BUILD_DIR="ssd-diagnostic-suite/build-output"
+if [ -d "$FRONTEND_BUILD_DIR" ]; then
+    sudo cp -r "$FRONTEND_BUILD_DIR"/. dist/
+else
+    echo "❌ Build output não encontrado em $FRONTEND_BUILD_DIR" >&2
+    exit 1
+fi
 echo "✅ Frontend buildado!"
 
 # Docker

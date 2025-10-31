@@ -47,11 +47,18 @@ jobs:
       - name: Create .env file
         run: |
           cp .env.example .env
-      
+
       - name: Prepare deployment files
         run: |
+          FRONTEND_BUILD_DIR="ssd-diagnostic-suite/build-output"
+          rm -rf dist
           mkdir -p dist
-          cp -r ssd-diagnostic-suite/build-output/* dist/ || true
+          if [ -d "$FRONTEND_BUILD_DIR" ]; then
+            cp -r "$FRONTEND_BUILD_DIR"/. dist/
+          else
+            echo "Build output not found at $FRONTEND_BUILD_DIR" >&2
+            exit 1
+          fi
       
       - name: Build Docker images
         run: |
