@@ -1,8 +1,12 @@
 #!/bin/bash
 set -e
 
+# Carregar chave SSH para deploy
+eval "$(ssh-agent -s)" >/dev/null 2>&1
+ssh-add ~/.ssh/id_ed25519_deploy >/dev/null 2>&1 || true
+
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
-echo "║     🚀 DEPLOY - SSD DIAGNOSTIC SUITE v2.5.1                           ║"
+echo "║     🚀 DEPLOY - SSD DIAGNOSTIC SUITE v2.5.2                           ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 echo ""
 
