@@ -50,8 +50,14 @@ jobs:
       
       - name: Prepare deployment files
         run: |
+          rm -rf dist
           mkdir -p dist
-          cp -r ssd-diagnostic-suite/build-output/* dist/ || true
+          if [ -d "ssd-diagnostic-suite/dist" ]; then
+            cp -r ssd-diagnostic-suite/dist/. dist/
+          else
+            echo "Build output not found at ssd-diagnostic-suite/dist" >&2
+            exit 1
+          fi
       
       - name: Build Docker images
         run: |

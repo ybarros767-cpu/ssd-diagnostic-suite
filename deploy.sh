@@ -25,8 +25,14 @@ echo "🔧 Build frontend..."
 cd ssd-diagnostic-suite
 npm run build
 cd ..
+sudo rm -rf dist
 sudo mkdir -p dist
-sudo cp -r ssd-diagnostic-suite/build-output/* dist/
+if [ -d "ssd-diagnostic-suite/dist" ]; then
+    sudo cp -r ssd-diagnostic-suite/dist/. dist/
+else
+    echo "❌ Build output não encontrado em ssd-diagnostic-suite/dist" >&2
+    exit 1
+fi
 echo "✅ Frontend buildado!"
 
 # Docker
